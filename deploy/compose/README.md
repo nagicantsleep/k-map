@@ -5,6 +5,7 @@ This compose stack provides the first local runtime slice for `k-map`:
 - `api`: the Go HTTP service from `cmd/api`
 - `postgres`: application metadata database
 - `redis`: cache and rate-limit store
+- `nominatim`: self-hosted geocoder runtime for forward and reverse lookups
 
 ## Commands
 
@@ -36,6 +37,7 @@ The stateful services expose stable local service names on the `kmap` network fo
 
 - `postgres:5432`
 - `redis:6379`
+- `nominatim:8080`
 
 Postgres uses the baseline local development credentials:
 
@@ -45,8 +47,47 @@ Postgres uses the baseline local development credentials:
 
 Persistent storage is currently enabled for Postgres through the named volume `postgres-data`.
 Redis is configured as an in-memory development cache with persistence disabled.
+Nominatim persists its embedded Postgres cluster and flatnode file through the named volumes
+`nominatim-data` and `nominatim-flatnode`.
 
-## Notes
+## Nominatim Import Defaults
 
-- This issue intentionally does not add `Nominatim` yet. That arrives in the next epic sub-issue so the compose topology can be extended without mixing concerns.
-- The API service does not yet consume Postgres or Redis connection settings. Those will be introduced when dependency wiring is added.
+The local stack now boots `mediagis/nominatim:5.2` with a lightweight Monaco extract by default so
+the first import remains practical in local development.
+
+Default dataset:
+
+- `https://download.geofabrik.de/europe/monaco-latest.osm.pbf`
+
+Default replication source:
+
+- `https://download.geofabrik.de/europe/monaco-updates/`
+
+These defaults can be overridden per shell session before running compose:
+
+```bash
+export KMAP_NOMINATIM_PBF_URL=https://download.geofabrik.de/north-america/us/california-latest.osm.pbf
+export KMAP_NOMINATIM_REPLICATION_URL=https://download.geofabrik.de/north-america/us/california-updates/
+docker compose -f deploy/compose/docker-compose.yml up -d
+```
+
+On PowerShell, set the same values with:
+
+```powershell
+$env:KMAP_NOMINATIM_PBF_URL = "https://download.geofabrik.de/north-america/us/california-latest.osm.pbf"
+$env:KMAP_NOMINATIM_REPLICATION_URL = "https://download.geofabrik.de/north-america/us/california-updates/"
+docker compose -f deploy/compose/docker-compose.yml up -d
+```
+
+Import notes:
+
+- The first `nominatim` startup downloads the configured `.osm.pbf` extract and performs the import inside the container.
+- Follow progress with `docker logs -f kmap-nominatim`.
+- Query the local geocoder on `http://localhost:8081` after the import completes.
+- Keep `FREEZE=true` for the current baseline so local environments do not start replication unexpectedly.
+
+## Storage Expectations
+
+- Monaco is appropriate for local bring-up and smoke tests because it keeps import time and disk usage low.
+- Larger Geofabrik extracts will increase startup time, disk, and memory needs materially; treat them as opt-in overrides rather than the default developer path.
+- The API service does not yet consume Postgres, Redis, or Nominatim connection settings. That wiring arrives in the next sub-issue.

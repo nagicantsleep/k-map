@@ -64,9 +64,30 @@ services:
     networks:
       - kmap
 
+  nominatim:
+    image: mediagis/nominatim:5.2
+    container_name: kmap-nominatim
+    environment:
+      PBF_URL: "${KMAP_NOMINATIM_PBF_URL:-https://download.geofabrik.de/europe/monaco-latest.osm.pbf}"
+      REPLICATION_URL: "${KMAP_NOMINATIM_REPLICATION_URL:-https://download.geofabrik.de/europe/monaco-updates/}"
+      IMPORT_WIKIPEDIA: "false"
+      FREEZE: "true"
+      THREADS: "2"
+    ports:
+      - "8081:8080"
+    restart: unless-stopped
+    shm_size: 1gb
+    volumes:
+      - nominatim-data:/var/lib/postgresql/16/main
+      - nominatim-flatnode:/nominatim/flatnode
+    networks:
+      - kmap
+
 networks:
   kmap:
     name: kmap
 
 volumes:
   postgres-data:
+  nominatim-data:
+  nominatim-flatnode:

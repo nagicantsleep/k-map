@@ -292,6 +292,8 @@ Use `Docker Compose` to run:
 - App Postgres
 - Nominatim stack
 
+For local bootstrap, prefer a small Geofabrik extract such as Monaco so the first Nominatim import is practical on a developer machine. Keep the dataset source configurable rather than hard-coding a long-term launch geography into the application code.
+
 ### Production MVP
 
 Recommended minimum runtime units:
@@ -345,6 +347,8 @@ Production should isolate public API from internal geocoder access using private
 - Automate import via scripts under `scripts/` or `deploy/`
 - Document source extracts, import commands, and rollback steps
 - Refresh on a scheduled cadence appropriate to target market needs
+
+For local development, the compose stack may default to a lightweight Geofabrik extract to reduce import cost while preserving the same self-hosted Nominatim workflow used in higher environments.
 
 ## 18. Initial Directory Ownership
 
