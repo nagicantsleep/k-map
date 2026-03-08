@@ -27,7 +27,16 @@ func run() int {
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
-	handler := api.NewHandler()
+	readinessChecker, err := api.NewReadinessChecker(cfg)
+	if err != nil {
+		logger.Error("failed to build readiness checker", "error", err)
+
+		return 1
+	}
+
+	handler := api.NewHandler(api.HandlerOptions{
+		ReadinessChecker: readinessChecker,
+	})
 	server := api.NewServer(cfg.HTTP, handler)
 
 	logger.Info("starting api server", "http_addr", cfg.HTTP.Address)

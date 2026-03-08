@@ -29,9 +29,13 @@ docker compose -f deploy/compose/docker-compose.yml config
 
 ## Local Runtime Defaults
 
-The API container currently only needs the HTTP bind address for this slice:
+The API container uses explicit dependency configuration so the same binary can run either on the
+host against published ports or inside the compose network:
 
 - `KMAP_HTTP_ADDR=:8080`
+- `KMAP_POSTGRES_ADDR=localhost:5432` by default, overridden to `postgres:5432` in compose
+- `KMAP_REDIS_ADDR=localhost:6379` by default, overridden to `redis:6379` in compose
+- `KMAP_NOMINATIM_URL=http://localhost:8081` by default, overridden to `http://nominatim:8080` in compose
 
 The stateful services expose stable local service names on the `kmap` network for later wiring:
 
@@ -90,4 +94,4 @@ Import notes:
 
 - Monaco is appropriate for local bring-up and smoke tests because it keeps import time and disk usage low.
 - Larger Geofabrik extracts will increase startup time, disk, and memory needs materially; treat them as opt-in overrides rather than the default developer path.
-- The API service does not yet consume Postgres, Redis, or Nominatim connection settings. That wiring arrives in the next sub-issue.
+- `/readyz` now verifies TCP reachability for Postgres, Redis, and Nominatim based on the configured dependency endpoints.

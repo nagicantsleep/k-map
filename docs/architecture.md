@@ -279,7 +279,7 @@ Track at minimum:
 ### Health Endpoints
 
 - `/healthz`: process health
-- `/readyz`: downstream dependency readiness
+- `/readyz`: downstream dependency readiness based on configured Postgres, Redis, and Nominatim reachability
 
 ## 14. Deployment Model
 
