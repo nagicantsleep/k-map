@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -13,7 +14,7 @@ func TestNewHandlerHealthz(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/healthz", nil)
 
-	NewHandler().ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusOK)
@@ -28,7 +29,7 @@ func TestNewHandlerReadyz(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
 
-	NewHandler().ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusOK)
@@ -43,11 +44,28 @@ func TestNewHandlerRejectsUnsupportedMethod(t *testing.T) {
 	recorder := httptest.NewRecorder()
 	request := httptest.NewRequest(http.MethodPost, "/healthz", nil)
 
-	NewHandler().ServeHTTP(recorder, request)
+	NewHandler(HandlerOptions{}).ServeHTTP(recorder, request)
 
 	if recorder.Code != http.StatusMethodNotAllowed {
 		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusMethodNotAllowed)
 	}
+}
+
+func TestNewHandlerReadyzReturnsServiceUnavailableWhenDependenciesFail(t *testing.T) {
+	t.Parallel()
+
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodGet, "/readyz", nil)
+
+	NewHandler(HandlerOptions{
+		ReadinessChecker: stubReadinessChecker{err: context.DeadlineExceeded},
+	}).ServeHTTP(recorder, request)
+
+	if recorder.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
+	}
+
+	assertStatusResponse(t, recorder, "not_ready")
 }
 
 func assertStatusResponse(t *testing.T, recorder *httptest.ResponseRecorder, wantStatus string) {
@@ -69,4 +87,12 @@ func assertStatusResponse(t *testing.T, recorder *httptest.ResponseRecorder, wan
 	if response.Service != "k-map" {
 		t.Fatalf("Service = %q, want %q", response.Service, "k-map")
 	}
+}
+
+type stubReadinessChecker struct {
+	err error
+}
+
+func (checker stubReadinessChecker) Check(_ context.Context) error {
+	return checker.err
 }

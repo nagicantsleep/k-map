@@ -1,0 +1,106 @@
+package api
+
+import (
+	"context"
+	"net"
+	"testing"
+	"time"
+
+	"github.com/nagicantsleep/k-map/internal/config"
+)
+
+func TestReadinessCheckerSucceedsWhenAllDependenciesReachable(t *testing.T) {
+	t.Parallel()
+
+	postgresAddress, closePostgres := newTCPListener(t)
+	defer closePostgres()
+
+	redisAddress, closeRedis := newTCPListener(t)
+	defer closeRedis()
+
+	nominatimAddress, closeNominatim := newTCPListener(t)
+	defer closeNominatim()
+
+	checker, err := NewReadinessChecker(config.Config{
+		Postgres: config.PostgresConfig{
+			Address:     postgresAddress,
+			DialTimeout: time.Second,
+		},
+		Redis: config.RedisConfig{
+			Address:     redisAddress,
+			DialTimeout: time.Second,
+		},
+		Nominatim: config.NominatimConfig{
+			BaseURL:     "http://" + nominatimAddress,
+			DialTimeout: time.Second,
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewReadinessChecker() error = %v", err)
+	}
+
+	if err := checker.Check(context.Background()); err != nil {
+		t.Fatalf("Check() error = %v", err)
+	}
+}
+
+func TestReadinessCheckerFailsWhenDependencyUnavailable(t *testing.T) {
+	t.Parallel()
+
+	postgresAddress, closePostgres := newTCPListener(t)
+	defer closePostgres()
+
+	redisAddress, closeRedis := newTCPListener(t)
+	defer closeRedis()
+
+	checker, err := NewReadinessChecker(config.Config{
+		Postgres: config.PostgresConfig{
+			Address:     postgresAddress,
+			DialTimeout: time.Second,
+		},
+		Redis: config.RedisConfig{
+			Address:     redisAddress,
+			DialTimeout: time.Second,
+		},
+		Nominatim: config.NominatimConfig{
+			BaseURL:     "http://127.0.0.1:1",
+			DialTimeout: 100 * time.Millisecond,
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewReadinessChecker() error = %v", err)
+	}
+
+	if err := checker.Check(context.Background()); err == nil {
+		t.Fatal("Check() error = nil, want error")
+	}
+}
+
+func newTCPListener(t *testing.T) (string, func()) {
+	t.Helper()
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("net.Listen() error = %v", err)
+	}
+
+	done := make(chan struct{})
+
+	go func() {
+		defer close(done)
+
+		for {
+			connection, acceptErr := listener.Accept()
+			if acceptErr != nil {
+				return
+			}
+
+			_ = connection.Close()
+		}
+	}()
+
+	return listener.Addr().String(), func() {
+		_ = listener.Close()
+		<-done
+	}
+}

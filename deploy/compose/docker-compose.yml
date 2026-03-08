@@ -5,12 +5,17 @@ services:
       dockerfile: deploy/compose/Dockerfile.api
     container_name: kmap-api
     depends_on:
+      nominatim:
+        condition: service_started
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
     environment:
       KMAP_HTTP_ADDR: :8080
+      KMAP_POSTGRES_ADDR: postgres:5432
+      KMAP_REDIS_ADDR: redis:6379
+      KMAP_NOMINATIM_URL: http://nominatim:8080
     ports:
       - "8080:8080"
     restart: unless-stopped
