@@ -1,0 +1,15 @@
+.env
+.env.*
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+coverage.out
+/bin/
+/dist/
+/.gocache/
+/.golangci-cache/
+/.tools/
