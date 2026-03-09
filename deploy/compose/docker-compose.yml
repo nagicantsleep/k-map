@@ -6,7 +6,7 @@ services:
     container_name: kmap-api
     depends_on:
       nominatim:
-        condition: service_started
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -23,7 +23,7 @@ services:
       - kmap
 
   postgres:
-    image: postgres:17-alpine
+    image: postgis/postgis:17-3.5-alpine
     container_name: kmap-postgres
     environment:
       POSTGRES_DB: kmap
@@ -78,6 +78,20 @@ services:
       IMPORT_WIKIPEDIA: "false"
       FREEZE: "true"
       THREADS: "2"
+    healthcheck:
+      test:
+        - CMD
+        - python3
+        - -c
+        - |
+          import json, sys, urllib.request
+          with urllib.request.urlopen("http://127.0.0.1:8080/status?format=json", timeout=5) as response:
+              payload = json.load(response)
+          sys.exit(0 if payload.get("status") == 0 else 1)
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 30s
     ports:
       - "8081:8080"
     restart: unless-stopped

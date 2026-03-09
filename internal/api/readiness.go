@@ -2,9 +2,12 @@ package api
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
 	"net/url"
+	"path"
 	"time"
 
 	"github.com/nagicantsleep/k-map/internal/config"
@@ -17,12 +20,23 @@ type dependencyCheck struct {
 }
 
 type networkReadinessChecker struct {
-	checks []dependencyCheck
+	checks    []dependencyCheck
+	nominatim nominatimReadinessCheck
+}
+
+type nominatimReadinessCheck struct {
+	statusURL string
+	timeout   time.Duration
+}
+
+type nominatimStatusResponse struct {
+	Message string `json:"message"`
+	Status  int    `json:"status"`
 }
 
 // NewReadinessChecker builds a dependency reachability checker from process config.
 func NewReadinessChecker(cfg config.Config) (ReadinessChecker, error) {
-	nominatimAddress, err := hostPortFromURL(cfg.Nominatim.BaseURL)
+	statusURL, err := nominatimStatusURL(cfg.Nominatim.BaseURL)
 	if err != nil {
 		return nil, err
 	}
@@ -39,45 +53,88 @@ func NewReadinessChecker(cfg config.Config) (ReadinessChecker, error) {
 				name:    "redis",
 				timeout: cfg.Redis.DialTimeout,
 			},
-			{
-				address: nominatimAddress,
-				name:    "nominatim",
-				timeout: cfg.Nominatim.DialTimeout,
-			},
+		},
+		nominatim: nominatimReadinessCheck{
+			statusURL: statusURL,
+			timeout:   cfg.Nominatim.DialTimeout,
 		},
 	}, nil
 }
 
 func (checker networkReadinessChecker) Check(ctx context.Context) error {
 	for _, check := range checker.checks {
-		dialer := net.Dialer{Timeout: check.timeout}
-
-		connection, err := dialer.DialContext(ctx, "tcp", check.address)
-		if err != nil {
+		if err := checkTCPDependency(ctx, check); err != nil {
 			return fmt.Errorf("dependency %s unreachable at %s: %w", check.name, check.address, err)
 		}
+	}
 
-		_ = connection.Close()
+	if err := checker.nominatim.Check(ctx); err != nil {
+		return fmt.Errorf("dependency nominatim not ready: %w", err)
 	}
 
 	return nil
 }
 
-func hostPortFromURL(rawURL string) (string, error) {
+func checkTCPDependency(ctx context.Context, check dependencyCheck) error {
+	dialer := net.Dialer{Timeout: check.timeout}
+
+	connection, err := dialer.DialContext(ctx, "tcp", check.address)
+	if err != nil {
+		return err
+	}
+
+	_ = connection.Close()
+
+	return nil
+}
+
+func (check nominatimReadinessCheck) Check(ctx context.Context) error {
+	request, err := http.NewRequestWithContext(ctx, http.MethodGet, check.statusURL, nil)
+	if err != nil {
+		return fmt.Errorf("build nominatim readiness request: %w", err)
+	}
+
+	client := http.Client{
+		Timeout: check.timeout,
+	}
+
+	response, err := client.Do(request)
+	if err != nil {
+		return fmt.Errorf("query nominatim status endpoint: %w", err)
+	}
+	defer response.Body.Close()
+
+	if response.StatusCode != http.StatusOK {
+		return fmt.Errorf("nominatim status endpoint returned %d", response.StatusCode)
+	}
+
+	var status nominatimStatusResponse
+	if err := json.NewDecoder(response.Body).Decode(&status); err != nil {
+		return fmt.Errorf("decode nominatim status response: %w", err)
+	}
+
+	if status.Status != 0 {
+		return fmt.Errorf("nominatim status endpoint reported %d: %s", status.Status, status.Message)
+	}
+
+	return nil
+}
+
+func nominatimStatusURL(rawURL string) (string, error) {
 	parsedURL, err := url.Parse(rawURL)
 	if err != nil {
 		return "", err
 	}
 
-	host := parsedURL.Hostname()
-	port := parsedURL.Port()
-	if port == "" {
-		if parsedURL.Scheme == "https" {
-			port = "443"
-		} else {
-			port = "80"
-		}
+	statusURL := *parsedURL
+	statusURL.Path = path.Join(parsedURL.Path, "status")
+	if statusURL.Path == "status" {
+		statusURL.Path = "/status"
 	}
 
-	return net.JoinHostPort(host, port), nil
+	query := statusURL.Query()
+	query.Set("format", "json")
+	statusURL.RawQuery = query.Encode()
+
+	return statusURL.String(), nil
 }

@@ -279,7 +279,7 @@ Track at minimum:
 ### Health Endpoints
 
 - `/healthz`: process health
-- `/readyz`: downstream dependency readiness based on configured Postgres, Redis, and Nominatim reachability
+- `/readyz`: downstream dependency readiness based on configured Postgres and Redis reachability plus Nominatim queryability through its status endpoint
 
 ## 14. Deployment Model
 
@@ -289,7 +289,7 @@ Use `Docker Compose` to run:
 
 - API service
 - Redis
-- App Postgres
+- App Postgres with `PostGIS`
 - Nominatim stack
 
 For local bootstrap, prefer a small Geofabrik extract such as Monaco so the first Nominatim import is practical on a developer machine. Keep the dataset source configurable rather than hard-coding a long-term launch geography into the application code.

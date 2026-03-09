@@ -49,6 +49,9 @@ Postgres uses the baseline local development credentials:
 - user: `kmap`
 - password: `kmap`
 
+The application database runs on `postgis/postgis:17-3.5-alpine` so local development includes
+the `PostGIS` extension support required by the documented runtime contract.
+
 Persistent storage is currently enabled for Postgres through the named volume `postgres-data`.
 Redis is configured as an in-memory development cache with persistence disabled.
 Nominatim persists its embedded Postgres cluster and flatnode file through the named volumes
@@ -87,6 +90,7 @@ Import notes:
 
 - The first `nominatim` startup downloads the configured `.osm.pbf` extract and performs the import inside the container.
 - Follow progress with `docker logs -f kmap-nominatim`.
+- Compose waits for the `nominatim` health check before starting the API container. That health check calls `http://127.0.0.1:8080/status?format=json` inside the container and only turns healthy after Nominatim reports `status=0`.
 - Query the local geocoder on `http://localhost:8081` after the import completes.
 - Keep `FREEZE=true` for the current baseline so local environments do not start replication unexpectedly.
 
@@ -94,4 +98,4 @@ Import notes:
 
 - Monaco is appropriate for local bring-up and smoke tests because it keeps import time and disk usage low.
 - Larger Geofabrik extracts will increase startup time, disk, and memory needs materially; treat them as opt-in overrides rather than the default developer path.
-- `/readyz` now verifies TCP reachability for Postgres, Redis, and Nominatim based on the configured dependency endpoints.
+- `/readyz` now verifies TCP reachability for Postgres and Redis, then checks the configured Nominatim `/status?format=json` endpoint so the API remains unready until the geocoder is queryable.
