@@ -1,0 +1,8 @@
+.git
+.gocache
+.golangci-cache
+.tmp
+bin
+dist
+coverage.out
+deploy/kubernetes
