@@ -13,15 +13,7 @@ import (
 	"github.com/nagicantsleep/k-map/internal/api"
 )
 
-// Geocoder defines the interface for geocoding operations.
-type Geocoder interface {
-	// Search performs a forward geocoding search.
-	Search(ctx context.Context, query string, limit int) ([]api.GeocodeResult, error)
-	// Reverse performs a reverse geocoding lookup.
-	Reverse(ctx context.Context, lat, lng float64) (*api.GeocodeResult, error)
-}
-
-// NominatimClient implements the Geocoder interface using Nominatim.
+// NominatimClient implements the api.Geocoder interface using Nominatim.
 type NominatimClient struct {
 	baseURL    string
 	httpClient *http.Client

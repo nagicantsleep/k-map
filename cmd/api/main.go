@@ -9,6 +9,7 @@ import (
 
 	"github.com/nagicantsleep/k-map/internal/api"
 	"github.com/nagicantsleep/k-map/internal/config"
+	"github.com/nagicantsleep/k-map/internal/geocode"
 )
 
 func main() {
@@ -34,9 +35,12 @@ func run() int {
 		return 1
 	}
 
+	nominatimClient := geocode.NewNominatimClient(cfg.Nominatim.BaseURL, cfg.HTTP.WriteTimeout)
+
 	handler := api.NewHandler(api.HandlerOptions{
 		Logger:           logger,
 		ReadinessChecker: readinessChecker,
+		Geocoder:         nominatimClient,
 	})
 	server := api.NewServer(cfg.HTTP, handler)
 
