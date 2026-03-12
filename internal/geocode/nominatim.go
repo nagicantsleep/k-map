@@ -1,0 +1,201 @@
+package geocode
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"io"
+	"net/http"
+	"net/url"
+	"strconv"
+	"time"
+
+	"github.com/nagicantsleep/k-map/internal/api"
+)
+
+// Geocoder defines the interface for geocoding operations.
+type Geocoder interface {
+	// Search performs a forward geocoding search.
+	Search(ctx context.Context, query string, limit int) ([]api.GeocodeResult, error)
+	// Reverse performs a reverse geocoding lookup.
+	Reverse(ctx context.Context, lat, lng float64) (*api.GeocodeResult, error)
+}
+
+// NominatimClient implements the Geocoder interface using Nominatim.
+type NominatimClient struct {
+	baseURL    string
+	httpClient *http.Client
+}
+
+// NewNominatimClient creates a new Nominatim client.
+func NewNominatimClient(baseURL string, timeout time.Duration) *NominatimClient {
+	return &NominatimClient{
+		baseURL: baseURL,
+		httpClient: &http.Client{
+			Timeout: timeout,
+		},
+	}
+}
+
+// nominatimResult represents a single Nominatim search result.
+type nominatimResult struct {
+	PlaceID     int                    `json:"place_id"`
+	Licence     string                 `json:"licence"`
+	OsmType     string                 `json:"osm_type"`
+	OsmID       int64                  `json:"osm_id"`
+	Lat         string                 `json:"lat"`
+	Lon         string                 `json:"lon"`
+	DisplayName string                 `json:"display_name"`
+	Class       string                 `json:"class"`
+	Type        string                 `json:"type"`
+	Importance  float64                `json:"importance"`
+	Address     *nominatimAddress      `json:"address"`
+}
+
+// nominatimAddress represents address components from Nominatim.
+type nominatimAddress struct {
+	HouseNumber  string `json:"house_number"`
+	Road         string `json:"road"`
+	City         string `json:"city"`
+	Town         string `json:"town"`
+	Village      string `json:"village"`
+	State        string `json:"state"`
+	Postcode     string `json:"postcode"`
+	Country      string `json:"country"`
+	CountryCode  string `json:"country_code"`
+}
+
+// Search performs a forward geocoding search using Nominatim.
+func (c *NominatimClient) Search(ctx context.Context, query string, limit int) ([]api.GeocodeResult, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+
+	params := url.Values{}
+	params.Set("q", query)
+	params.Set("format", "json")
+	params.Set("limit", strconv.Itoa(limit))
+	params.Set("addressdetails", "1")
+
+	endpoint := fmt.Sprintf("%s/search?%s", c.baseURL, params.Encode())
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("nominatim request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("nominatim returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var results []nominatimResult
+	if err := json.Unmarshal(body, &results); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return c.normalizeResults(results), nil
+}
+
+// Reverse performs a reverse geocoding lookup using Nominatim.
+func (c *NominatimClient) Reverse(ctx context.Context, lat, lng float64) (*api.GeocodeResult, error) {
+	params := url.Values{}
+	params.Set("lat", strconv.FormatFloat(lat, 'f', -1, 64))
+	params.Set("lon", strconv.FormatFloat(lng, 'f', -1, 64))
+	params.Set("format", "json")
+	params.Set("addressdetails", "1")
+
+	endpoint := fmt.Sprintf("%s/reverse?%s", c.baseURL, params.Encode())
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("nominatim request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("nominatim returned status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	var result nominatimResult
+	if err := json.Unmarshal(body, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	// Nominatim returns an empty result when no match is found
+	if result.PlaceID == 0 && result.Lat == "" {
+		return nil, nil
+	}
+
+	normalized := c.normalizeResult(result)
+	return &normalized, nil
+}
+
+func (c *NominatimClient) normalizeResults(results []nominatimResult) []api.GeocodeResult {
+	if len(results) == 0 {
+		return nil
+	}
+
+	normalized := make([]api.GeocodeResult, len(results))
+	for i, r := range results {
+		normalized[i] = c.normalizeResult(r)
+	}
+
+	return normalized
+}
+
+func (c *NominatimClient) normalizeResult(r nominatimResult) api.GeocodeResult {
+	lat, _ := strconv.ParseFloat(r.Lat, 64)
+	lng, _ := strconv.ParseFloat(r.Lon, 64)
+
+	result := api.GeocodeResult{
+		FormattedAddress: r.DisplayName,
+		Latitude:         lat,
+		Longitude:        lng,
+		Confidence:       r.Importance,
+		Source:           "osm",
+		PlaceType:        r.Type,
+	}
+
+	if r.Address != nil {
+		result.Components = api.AddressComponents{
+			StreetNumber: r.Address.HouseNumber,
+			Street:       r.Address.Road,
+			State:        r.Address.State,
+			PostalCode:   r.Address.Postcode,
+			Country:      r.Address.Country,
+			CountryCode:  r.Address.CountryCode,
+		}
+
+		// Handle city/town/village
+		if r.Address.City != "" {
+			result.Components.City = r.Address.City
+		} else if r.Address.Town != "" {
+			result.Components.City = r.Address.Town
+		} else if r.Address.Village != "" {
+			result.Components.City = r.Address.Village
+		}
+	}
+
+	return result
+}
