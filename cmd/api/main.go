@@ -62,13 +62,15 @@ func run() int {
 	proximitySvc := proximity.NewService(cachedGeocoder)
 
 	authRepo := auth.NewRepository(db)
+	rateLimiter := auth.NewRateLimiter(cfg.Redis.Address, cfg.RateLimit.RequestsPerMinute)
 
 	handler := api.NewHandler(api.HandlerOptions{
-		Logger:           logger,
-		ReadinessChecker: readinessChecker,
-		Geocoder:         cachedGeocoder,
-		Proximity:        proximitySvc,
-		AuthMiddleware:   auth.AuthMiddleware(authRepo),
+		Logger:              logger,
+		ReadinessChecker:    readinessChecker,
+		Geocoder:            cachedGeocoder,
+		Proximity:           proximitySvc,
+		AuthMiddleware:      auth.AuthMiddleware(authRepo),
+		RateLimitMiddleware: auth.RateLimitMiddleware(rateLimiter),
 	})
 	server := api.NewServer(cfg.HTTP, handler)
 

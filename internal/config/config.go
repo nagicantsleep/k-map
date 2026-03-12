@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -22,6 +23,7 @@ const (
 	defaultDependencyDialTimeout = 2 * time.Second
 	defaultCacheTTL              = 5 * time.Minute
 	defaultPostgresDSN           = "postgres://kmap:kmap@localhost:5432/kmap?sslmode=disable"
+	defaultRateLimitRPM          = 60
 )
 
 var errInvalidConfig = errors.New("invalid configuration")
@@ -32,6 +34,7 @@ type Config struct {
 	Postgres  PostgresConfig
 	Redis     RedisConfig
 	Nominatim NominatimConfig
+	RateLimit RateLimitConfig
 }
 
 // HTTPConfig contains HTTP server settings.
@@ -64,6 +67,11 @@ type NominatimConfig struct {
 	DialTimeout time.Duration
 }
 
+// RateLimitConfig contains rate limiting settings.
+type RateLimitConfig struct {
+	RequestsPerMinute int
+}
+
 // Load builds Config from environment variables and applies defaults.
 func Load() (Config, error) {
 	cfg := Config{
@@ -88,6 +96,9 @@ func Load() (Config, error) {
 		Nominatim: NominatimConfig{
 			BaseURL:     getEnv("KMAP_NOMINATIM_URL", defaultNominatimBaseURL),
 			DialTimeout: getDurationEnv("KMAP_NOMINATIM_DIAL_TIMEOUT", defaultDependencyDialTimeout),
+		},
+		RateLimit: RateLimitConfig{
+			RequestsPerMinute: getIntEnv("KMAP_RATE_LIMIT_RPM", defaultRateLimitRPM),
 		},
 	}
 
@@ -200,4 +211,22 @@ func getDurationEnv(key string, fallback time.Duration) time.Duration {
 	}
 
 	return duration
+}
+
+func getIntEnv(key string, fallback int) int {
+	value, ok := os.LookupEnv(key)
+	if !ok {
+		return fallback
+	}
+
+	if strings.TrimSpace(value) == "" {
+		return fallback
+	}
+
+	n, err := strconv.Atoi(value)
+	if err != nil {
+		return fallback
+	}
+
+	return n
 }
