@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/nagicantsleep/k-map/internal/api"
+	"github.com/nagicantsleep/k-map/internal/auth"
 	"github.com/nagicantsleep/k-map/internal/config"
 	"github.com/nagicantsleep/k-map/internal/geocode"
 	"github.com/nagicantsleep/k-map/internal/proximity"
@@ -60,11 +61,14 @@ func run() int {
 
 	proximitySvc := proximity.NewService(cachedGeocoder)
 
+	authRepo := auth.NewRepository(db)
+
 	handler := api.NewHandler(api.HandlerOptions{
 		Logger:           logger,
 		ReadinessChecker: readinessChecker,
 		Geocoder:         cachedGeocoder,
 		Proximity:        proximitySvc,
+		AuthMiddleware:   auth.AuthMiddleware(authRepo),
 	})
 	server := api.NewServer(cfg.HTTP, handler)
 

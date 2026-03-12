@@ -32,6 +32,7 @@ type HandlerOptions struct {
 	ReadinessChecker ReadinessChecker
 	Geocoder         Geocoder
 	Proximity        ProximityChecker
+	AuthMiddleware   func(http.Handler) http.Handler
 }
 
 // NewHandler builds the base handler graph for the public API.
@@ -64,6 +65,11 @@ func newV1Handler(options HandlerOptions) http.Handler {
 
 	// Build middleware chain
 	var handler http.Handler = mux
+
+	// Apply auth middleware (after logging, before handlers)
+	if options.AuthMiddleware != nil {
+		handler = options.AuthMiddleware(handler)
+	}
 
 	// Apply logging middleware (requires request ID from RequestIDMiddleware)
 	if options.Logger != nil {
