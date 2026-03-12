@@ -33,7 +33,9 @@ func UsageMiddleware(recorder UsageRecorderInterface, logger *slog.Logger) func(
 
 			go func() {
 				if err := recorder.Record(context.Background(), tenantID, r.URL.Path, requestID, rw.statusCode, latencyMs); err != nil {
-					logger.Error("failed to record usage", "error", err, "tenant_id", tenantID)
+					if logger != nil {
+						logger.Error("failed to record usage", "error", err, "tenant_id", tenantID)
+					}
 				}
 			}()
 		})
