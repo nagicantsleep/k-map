@@ -21,6 +21,7 @@ const (
 	defaultNominatimBaseURL      = "http://localhost:8081"
 	defaultDependencyDialTimeout = 2 * time.Second
 	defaultCacheTTL              = 5 * time.Minute
+	defaultPostgresDSN           = "postgres://kmap:kmap@localhost:5432/kmap?sslmode=disable"
 )
 
 var errInvalidConfig = errors.New("invalid configuration")
@@ -46,6 +47,7 @@ type HTTPConfig struct {
 // PostgresConfig contains local Postgres dependency settings.
 type PostgresConfig struct {
 	Address     string
+	DSN         string
 	DialTimeout time.Duration
 }
 
@@ -75,6 +77,7 @@ func Load() (Config, error) {
 		},
 		Postgres: PostgresConfig{
 			Address:     getEnv("KMAP_POSTGRES_ADDR", defaultPostgresAddress),
+			DSN:         getEnv("KMAP_POSTGRES_DSN", defaultPostgresDSN),
 			DialTimeout: getDurationEnv("KMAP_POSTGRES_DIAL_TIMEOUT", defaultDependencyDialTimeout),
 		},
 		Redis: RedisConfig{

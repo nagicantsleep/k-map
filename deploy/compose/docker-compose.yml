@@ -14,6 +14,7 @@ services:
     environment:
       KMAP_HTTP_ADDR: :8080
       KMAP_POSTGRES_ADDR: postgres:5432
+      KMAP_POSTGRES_DSN: postgres://kmap:kmap@postgres:5432/kmap?sslmode=disable
       KMAP_REDIS_ADDR: redis:6379
       KMAP_NOMINATIM_URL: http://nominatim:8080
     ports:

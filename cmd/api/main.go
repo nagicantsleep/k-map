@@ -12,6 +12,7 @@ import (
 	"github.com/nagicantsleep/k-map/internal/geocode"
 	"github.com/nagicantsleep/k-map/internal/proximity"
 	"github.com/nagicantsleep/k-map/internal/storage"
+	"github.com/nagicantsleep/k-map/migrations"
 )
 
 func main() {
@@ -30,6 +31,21 @@ func run() int {
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+	db, err := storage.NewPostgresPool(cfg.Postgres.DSN)
+	if err != nil {
+		logger.Error("failed to connect to postgres", "error", err)
+
+		return 1
+	}
+	defer db.Close()
+
+	if err := storage.RunMigrations(db, migrations.FS); err != nil {
+		logger.Error("failed to run migrations", "error", err)
+
+		return 1
+	}
+
 	readinessChecker, err := api.NewReadinessChecker(cfg)
 	if err != nil {
 		logger.Error("failed to build readiness checker", "error", err)
