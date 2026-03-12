@@ -20,6 +20,7 @@ const (
 	defaultRedisAddress          = "localhost:6379"
 	defaultNominatimBaseURL      = "http://localhost:8081"
 	defaultDependencyDialTimeout = 2 * time.Second
+	defaultCacheTTL              = 5 * time.Minute
 )
 
 var errInvalidConfig = errors.New("invalid configuration")
@@ -52,6 +53,7 @@ type PostgresConfig struct {
 type RedisConfig struct {
 	Address     string
 	DialTimeout time.Duration
+	CacheTTL    time.Duration
 }
 
 // NominatimConfig contains local Nominatim dependency settings.
@@ -78,6 +80,7 @@ func Load() (Config, error) {
 		Redis: RedisConfig{
 			Address:     getEnv("KMAP_REDIS_ADDR", defaultRedisAddress),
 			DialTimeout: getDurationEnv("KMAP_REDIS_DIAL_TIMEOUT", defaultDependencyDialTimeout),
+			CacheTTL:    getDurationEnv("KMAP_CACHE_TTL", defaultCacheTTL),
 		},
 		Nominatim: NominatimConfig{
 			BaseURL:     getEnv("KMAP_NOMINATIM_URL", defaultNominatimBaseURL),

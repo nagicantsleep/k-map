@@ -10,6 +10,7 @@ import (
 	"github.com/nagicantsleep/k-map/internal/api"
 	"github.com/nagicantsleep/k-map/internal/config"
 	"github.com/nagicantsleep/k-map/internal/geocode"
+	"github.com/nagicantsleep/k-map/internal/storage"
 )
 
 func main() {
@@ -37,10 +38,13 @@ func run() int {
 
 	nominatimClient := geocode.NewNominatimClient(cfg.Nominatim.BaseURL, cfg.HTTP.WriteTimeout)
 
+	cache := storage.NewCache(cfg.Redis.Address, cfg.Redis.CacheTTL)
+	cachedGeocoder := geocode.NewCachedGeocoder(nominatimClient, cache, logger)
+
 	handler := api.NewHandler(api.HandlerOptions{
 		Logger:           logger,
 		ReadinessChecker: readinessChecker,
-		Geocoder:         nominatimClient,
+		Geocoder:         cachedGeocoder,
 	})
 	server := api.NewServer(cfg.HTTP, handler)
 
