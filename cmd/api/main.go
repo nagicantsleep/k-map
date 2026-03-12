@@ -35,6 +35,7 @@ func run() int {
 	}
 
 	handler := api.NewHandler(api.HandlerOptions{
+		Logger:           logger,
 		ReadinessChecker: readinessChecker,
 	})
 	server := api.NewServer(cfg.HTTP, handler)
