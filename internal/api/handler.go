@@ -13,11 +13,25 @@ type Geocoder interface {
 	Reverse(ctx context.Context, lat, lng float64) (*GeocodeResult, error)
 }
 
+// ProximityChecker defines the interface for proximity validation.
+type ProximityChecker interface {
+	Check(ctx context.Context, lat, lng float64, targetQuery string, thresholdMeters float64) (*ProximityResult, error)
+}
+
+// ProximityResult holds the outcome of a proximity check for the handler layer.
+type ProximityResult struct {
+	IsNear          bool
+	DistanceMeters  float64
+	ThresholdMeters float64
+	TargetMatch     *GeocodeResult
+}
+
 // HandlerOptions defines injectable transport dependencies for the base handler graph.
 type HandlerOptions struct {
 	Logger           *slog.Logger
 	ReadinessChecker ReadinessChecker
 	Geocoder         Geocoder
+	Proximity        ProximityChecker
 }
 
 // NewHandler builds the base handler graph for the public API.
@@ -42,6 +56,10 @@ func newV1Handler(options HandlerOptions) http.Handler {
 	if options.Geocoder != nil {
 		mux.HandleFunc("/geocode/forward", forwardGeocodeHandler(options.Geocoder))
 		mux.HandleFunc("/geocode/reverse", reverseGeocodeHandler(options.Geocoder))
+	}
+
+	if options.Proximity != nil {
+		mux.HandleFunc("/geocode/proximity", proximityHandler(options.Proximity))
 	}
 
 	// Build middleware chain
@@ -136,6 +154,51 @@ func reverseGeocodeHandler(geocoder Geocoder) http.HandlerFunc {
 			Latitude:  req.Latitude,
 			Longitude: req.Longitude,
 			Result:    result,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp)
+	}
+}
+
+// proximityHandler handles POST /v1/geocode/proximity.
+func proximityHandler(checker ProximityChecker) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		requestID := RequestIDFromContext(r.Context())
+
+		if r.Method != http.MethodPost {
+			WriteError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", requestID)
+			return
+		}
+
+		var req ProximityRequest
+		if err := DecodeJSON(r, &req); err != nil {
+			WriteBadRequest(w, err.Error(), requestID)
+			return
+		}
+
+		if err := ValidateCoordinate(req.Latitude, req.Longitude); err != nil {
+			WriteBadRequest(w, err.Error(), requestID)
+			return
+		}
+
+		if err := ValidateRequiredString(req.TargetQuery, "target_query"); err != nil {
+			WriteBadRequest(w, err.Error(), requestID)
+			return
+		}
+
+		result, err := checker.Check(r.Context(), req.Latitude, req.Longitude, req.TargetQuery, req.ThresholdMeters)
+		if err != nil {
+			WriteInternalError(w, requestID)
+			return
+		}
+
+		resp := ProximityResponse{
+			IsNear:          result.IsNear,
+			DistanceMeters:  result.DistanceMeters,
+			ThresholdMeters: result.ThresholdMeters,
+			TargetMatch:     result.TargetMatch,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

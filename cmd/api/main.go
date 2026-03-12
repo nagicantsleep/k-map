@@ -10,6 +10,7 @@ import (
 	"github.com/nagicantsleep/k-map/internal/api"
 	"github.com/nagicantsleep/k-map/internal/config"
 	"github.com/nagicantsleep/k-map/internal/geocode"
+	"github.com/nagicantsleep/k-map/internal/proximity"
 	"github.com/nagicantsleep/k-map/internal/storage"
 )
 
@@ -41,10 +42,13 @@ func run() int {
 	cache := storage.NewCache(cfg.Redis.Address, cfg.Redis.CacheTTL)
 	cachedGeocoder := geocode.NewCachedGeocoder(nominatimClient, cache, logger)
 
+	proximitySvc := proximity.NewService(cachedGeocoder)
+
 	handler := api.NewHandler(api.HandlerOptions{
 		Logger:           logger,
 		ReadinessChecker: readinessChecker,
 		Geocoder:         cachedGeocoder,
+		Proximity:        proximitySvc,
 	})
 	server := api.NewServer(cfg.HTTP, handler)
 
