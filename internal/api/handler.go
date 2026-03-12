@@ -41,6 +41,7 @@ func newV1Handler(options HandlerOptions) http.Handler {
 
 	if options.Geocoder != nil {
 		mux.HandleFunc("/geocode/forward", forwardGeocodeHandler(options.Geocoder))
+		mux.HandleFunc("/geocode/reverse", reverseGeocodeHandler(options.Geocoder))
 	}
 
 	// Build middleware chain
@@ -96,6 +97,45 @@ func forwardGeocodeHandler(geocoder Geocoder) http.HandlerFunc {
 		resp := ForwardGeocodeResponse{
 			Query:   req.Query,
 			Results: results,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_ = json.NewEncoder(w).Encode(resp)
+	}
+}
+
+// reverseGeocodeHandler handles POST /v1/geocode/reverse.
+func reverseGeocodeHandler(geocoder Geocoder) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		requestID := RequestIDFromContext(r.Context())
+
+		if r.Method != http.MethodPost {
+			WriteError(w, http.StatusMethodNotAllowed, "method_not_allowed", "Only POST is allowed", requestID)
+			return
+		}
+
+		var req ReverseGeocodeRequest
+		if err := DecodeJSON(r, &req); err != nil {
+			WriteBadRequest(w, err.Error(), requestID)
+			return
+		}
+
+		if err := ValidateCoordinate(req.Latitude, req.Longitude); err != nil {
+			WriteBadRequest(w, err.Error(), requestID)
+			return
+		}
+
+		result, err := geocoder.Reverse(r.Context(), req.Latitude, req.Longitude)
+		if err != nil {
+			WriteInternalError(w, requestID)
+			return
+		}
+
+		resp := ReverseGeocodeResponse{
+			Latitude:  req.Latitude,
+			Longitude: req.Longitude,
+			Result:    result,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

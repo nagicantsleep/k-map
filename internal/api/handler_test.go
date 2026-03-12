@@ -203,3 +203,138 @@ func (g *limitCapturingGeocoder) Search(_ context.Context, _ string, limit int) 
 func (g *limitCapturingGeocoder) Reverse(_ context.Context, _, _ float64) (*GeocodeResult, error) {
 	return nil, nil
 }
+
+func TestReverseGeocodeHandler_Success(t *testing.T) {
+	t.Parallel()
+
+	geo := &mockGeocoder{
+		reverseResult: &GeocodeResult{
+			FormattedAddress: "1600 Amphitheatre Parkway, Mountain View, CA",
+			Latitude:         37.422,
+			Longitude:        -122.084,
+			Confidence:       0.9,
+			Source:           "osm",
+			PlaceType:        "house",
+		},
+	}
+
+	handler := reverseGeocodeHandler(geo)
+	body := `{"latitude":37.422,"longitude":-122.084}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/geocode/reverse", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var resp ReverseGeocodeResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Latitude != 37.422 {
+		t.Errorf("expected latitude 37.422, got %f", resp.Latitude)
+	}
+
+	if resp.Result == nil {
+		t.Fatal("expected non-nil result")
+	}
+
+	if resp.Result.FormattedAddress != "1600 Amphitheatre Parkway, Mountain View, CA" {
+		t.Errorf("unexpected formatted address: %s", resp.Result.FormattedAddress)
+	}
+}
+
+func TestReverseGeocodeHandler_NoMatch(t *testing.T) {
+	t.Parallel()
+
+	geo := &mockGeocoder{reverseResult: nil}
+
+	handler := reverseGeocodeHandler(geo)
+	body := `{"latitude":0.0,"longitude":0.0}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/geocode/reverse", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", rec.Code)
+	}
+
+	var resp ReverseGeocodeResponse
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+
+	if resp.Result != nil {
+		t.Errorf("expected nil result, got %+v", resp.Result)
+	}
+}
+
+func TestReverseGeocodeHandler_InvalidCoordinates(t *testing.T) {
+	t.Parallel()
+
+	geo := &mockGeocoder{}
+
+	handler := reverseGeocodeHandler(geo)
+	body := `{"latitude":91.0,"longitude":0.0}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/geocode/reverse", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
+
+func TestReverseGeocodeHandler_MethodNotAllowed(t *testing.T) {
+	t.Parallel()
+
+	geo := &mockGeocoder{}
+
+	handler := reverseGeocodeHandler(geo)
+	req := httptest.NewRequest(http.MethodGet, "/v1/geocode/reverse", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", rec.Code)
+	}
+}
+
+func TestReverseGeocodeHandler_GeocoderError(t *testing.T) {
+	t.Parallel()
+
+	geo := &mockGeocoder{reverseErr: errors.New("nominatim down")}
+
+	handler := reverseGeocodeHandler(geo)
+	body := `{"latitude":37.422,"longitude":-122.084}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/geocode/reverse", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d", rec.Code)
+	}
+}
+
+func TestReverseGeocodeHandler_InvalidJSON(t *testing.T) {
+	t.Parallel()
+
+	geo := &mockGeocoder{}
+
+	handler := reverseGeocodeHandler(geo)
+	req := httptest.NewRequest(http.MethodPost, "/v1/geocode/reverse", bytes.NewBufferString("not json"))
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d", rec.Code)
+	}
+}
