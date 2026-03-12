@@ -34,6 +34,7 @@ type HandlerOptions struct {
 	Proximity        ProximityChecker
 	AuthMiddleware      func(http.Handler) http.Handler
 	RateLimitMiddleware func(http.Handler) http.Handler
+	UsageMiddleware     func(http.Handler) http.Handler
 }
 
 // NewHandler builds the base handler graph for the public API.
@@ -64,8 +65,13 @@ func newV1Handler(options HandlerOptions) http.Handler {
 		mux.HandleFunc("/geocode/proximity", proximityHandler(options.Proximity))
 	}
 
-	// Build middleware chain (execution order: RequestID → Logging → Auth → RateLimit → Handler)
+	// Build middleware chain (execution order: RequestID → Logging → Auth → RateLimit → Usage → Handler)
 	var handler http.Handler = mux
+
+	// Apply usage recording (innermost, captures status and latency)
+	if options.UsageMiddleware != nil {
+		handler = options.UsageMiddleware(handler)
+	}
 
 	// Apply rate limiting (after auth so tenant ID is available)
 	if options.RateLimitMiddleware != nil {

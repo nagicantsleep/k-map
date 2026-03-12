@@ -63,6 +63,7 @@ func run() int {
 
 	authRepo := auth.NewRepository(db)
 	rateLimiter := auth.NewRateLimiter(cfg.Redis.Address, cfg.RateLimit.RequestsPerMinute)
+	usageRecorder := auth.NewUsageRecorder(db)
 
 	handler := api.NewHandler(api.HandlerOptions{
 		Logger:              logger,
@@ -71,6 +72,7 @@ func run() int {
 		Proximity:           proximitySvc,
 		AuthMiddleware:      auth.AuthMiddleware(authRepo),
 		RateLimitMiddleware: auth.RateLimitMiddleware(rateLimiter),
+		UsageMiddleware:     auth.UsageMiddleware(usageRecorder, logger),
 	})
 	server := api.NewServer(cfg.HTTP, handler)
 
