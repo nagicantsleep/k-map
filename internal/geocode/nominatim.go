@@ -11,12 +11,14 @@ import (
 	"time"
 
 	"github.com/nagicantsleep/k-map/internal/api"
+	"github.com/nagicantsleep/k-map/internal/telemetry"
 )
 
 // NominatimClient implements the api.Geocoder interface using Nominatim.
 type NominatimClient struct {
 	baseURL    string
 	httpClient *http.Client
+	metrics    *telemetry.Metrics
 }
 
 // NewNominatimClient creates a new Nominatim client.
@@ -27,6 +29,12 @@ func NewNominatimClient(baseURL string, timeout time.Duration) *NominatimClient 
 			Timeout: timeout,
 		},
 	}
+}
+
+// WithMetrics attaches a metrics collector to the Nominatim client.
+func (c *NominatimClient) WithMetrics(m *telemetry.Metrics) *NominatimClient {
+	c.metrics = m
+	return c
 }
 
 // nominatimResult represents a single Nominatim search result.
@@ -76,7 +84,14 @@ func (c *NominatimClient) Search(ctx context.Context, query string, limit int) (
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
+	start := time.Now()
 	resp, err := c.httpClient.Do(req)
+	elapsed := time.Since(start)
+
+	if c.metrics != nil {
+		c.metrics.GeocoderDuration.WithLabelValues("search").Observe(elapsed.Seconds())
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("nominatim request failed: %w", err)
 	}
@@ -114,7 +129,14 @@ func (c *NominatimClient) Reverse(ctx context.Context, lat, lng float64) (*api.G
 		return nil, fmt.Errorf("failed to create request: %w", err)
 	}
 
+	start := time.Now()
 	resp, err := c.httpClient.Do(req)
+	elapsed := time.Since(start)
+
+	if c.metrics != nil {
+		c.metrics.GeocoderDuration.WithLabelValues("reverse").Observe(elapsed.Seconds())
+	}
+
 	if err != nil {
 		return nil, fmt.Errorf("nominatim request failed: %w", err)
 	}

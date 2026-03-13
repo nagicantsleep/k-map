@@ -59,10 +59,12 @@ func run() int {
 	reg := prometheus.NewRegistry()
 	metrics := telemetry.NewMetrics(reg)
 
-	nominatimClient := geocode.NewNominatimClient(cfg.Nominatim.BaseURL, cfg.HTTP.WriteTimeout)
+	nominatimClient := geocode.NewNominatimClient(cfg.Nominatim.BaseURL, cfg.HTTP.WriteTimeout).
+		WithMetrics(metrics)
 
 	cache := storage.NewCache(cfg.Redis.Address, cfg.Redis.CacheTTL)
-	cachedGeocoder := geocode.NewCachedGeocoder(nominatimClient, cache, logger)
+	cachedGeocoder := geocode.NewCachedGeocoder(nominatimClient, cache, logger).
+		WithMetrics(metrics)
 
 	proximitySvc := proximity.NewService(cachedGeocoder)
 
