@@ -2,11 +2,13 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/nagicantsleep/k-map/internal/telemetry"
 )
 
 // RequestIDHeader is the header key for the request ID.
@@ -100,6 +102,30 @@ func LoggingMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 				"latency_ms", latency.Milliseconds(),
 				"request_id", requestID,
 			)
+		})
+	}
+}
+
+// MetricsMiddleware records per-request Prometheus metrics (total count, latency, rate-limit rejections).
+func MetricsMiddleware(m *telemetry.Metrics) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+
+			rw := &responseWriter{ResponseWriter: w}
+			next.ServeHTTP(rw, r)
+
+			duration := time.Since(start).Seconds()
+			endpoint := r.URL.Path
+			method := r.Method
+			statusCode := fmt.Sprintf("%d", rw.statusCode)
+
+			m.RequestTotal.WithLabelValues(endpoint, method, statusCode).Inc()
+			m.RequestDuration.WithLabelValues(endpoint, method).Observe(duration)
+
+			if rw.statusCode == http.StatusTooManyRequests {
+				m.RateLimitRejections.WithLabelValues(endpoint).Inc()
+			}
 		})
 	}
 }

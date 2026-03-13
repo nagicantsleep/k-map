@@ -5,6 +5,10 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+
+	"github.com/nagicantsleep/k-map/internal/telemetry"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Geocoder defines the interface for geocoding operations used by handlers.
@@ -28,10 +32,12 @@ type ProximityResult struct {
 
 // HandlerOptions defines injectable transport dependencies for the base handler graph.
 type HandlerOptions struct {
-	Logger           *slog.Logger
-	ReadinessChecker ReadinessChecker
-	Geocoder         Geocoder
-	Proximity        ProximityChecker
+	Logger              *slog.Logger
+	ReadinessChecker    ReadinessChecker
+	Geocoder            Geocoder
+	Proximity           ProximityChecker
+	Metrics             *telemetry.Metrics
+	MetricsRegistry     prometheus.Gatherer
 	AuthMiddleware      func(http.Handler) http.Handler
 	RateLimitMiddleware func(http.Handler) http.Handler
 	UsageMiddleware     func(http.Handler) http.Handler
@@ -44,6 +50,13 @@ func NewHandler(options HandlerOptions) http.Handler {
 	// Health and readiness endpoints at root level (no auth required)
 	mux.HandleFunc("/healthz", healthHandler)
 	mux.HandleFunc("/readyz", readinessHandler(options.ReadinessChecker))
+
+	// Prometheus metrics endpoint (unauthenticated, not under /v1/)
+	metricsGatherer := options.MetricsRegistry
+	if metricsGatherer == nil {
+		metricsGatherer = prometheus.DefaultGatherer
+	}
+	mux.Handle("/metrics", promhttp.HandlerFor(metricsGatherer, promhttp.HandlerOpts{}))
 
 	// Create v1 sub-router with middleware chain
 	v1Handler := newV1Handler(options)
@@ -65,7 +78,7 @@ func newV1Handler(options HandlerOptions) http.Handler {
 		mux.HandleFunc("/geocode/proximity", proximityHandler(options.Proximity))
 	}
 
-	// Build middleware chain (execution order: RequestID → Logging → Auth → RateLimit → Usage → Handler)
+	// Build middleware chain (execution order: RequestID → Metrics → Logging → Auth → RateLimit → Usage → Handler)
 	var handler http.Handler = mux
 
 	// Apply usage recording (innermost, captures status and latency)
@@ -86,6 +99,11 @@ func newV1Handler(options HandlerOptions) http.Handler {
 	// Apply logging middleware
 	if options.Logger != nil {
 		handler = LoggingMiddleware(options.Logger)(handler)
+	}
+
+	// Apply metrics middleware (outermost after request ID so path is known)
+	if options.Metrics != nil {
+		handler = MetricsMiddleware(options.Metrics)(handler)
 	}
 
 	// Apply request ID middleware (must be outermost)

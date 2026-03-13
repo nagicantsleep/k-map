@@ -13,7 +13,9 @@ import (
 	"github.com/nagicantsleep/k-map/internal/geocode"
 	"github.com/nagicantsleep/k-map/internal/proximity"
 	"github.com/nagicantsleep/k-map/internal/storage"
+	"github.com/nagicantsleep/k-map/internal/telemetry"
 	"github.com/nagicantsleep/k-map/migrations"
+	"github.com/prometheus/client_golang/prometheus"
 )
 
 func main() {
@@ -54,6 +56,9 @@ func run() int {
 		return 1
 	}
 
+	reg := prometheus.NewRegistry()
+	metrics := telemetry.NewMetrics(reg)
+
 	nominatimClient := geocode.NewNominatimClient(cfg.Nominatim.BaseURL, cfg.HTTP.WriteTimeout)
 
 	cache := storage.NewCache(cfg.Redis.Address, cfg.Redis.CacheTTL)
@@ -70,6 +75,8 @@ func run() int {
 		ReadinessChecker:    readinessChecker,
 		Geocoder:            cachedGeocoder,
 		Proximity:           proximitySvc,
+		Metrics:             metrics,
+		MetricsRegistry:     reg,
 		AuthMiddleware:      auth.AuthMiddleware(authRepo),
 		RateLimitMiddleware: auth.RateLimitMiddleware(rateLimiter),
 		UsageMiddleware:     auth.UsageMiddleware(usageRecorder, logger),
