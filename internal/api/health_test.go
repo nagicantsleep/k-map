@@ -35,7 +35,7 @@ func TestNewHandlerReadyz(t *testing.T) {
 		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusOK)
 	}
 
-	assertStatusResponse(t, recorder, "ready")
+	assertStatusResponse(t, recorder, "ok")
 }
 
 func TestNewHandlerRejectsUnsupportedMethod(t *testing.T) {
@@ -65,7 +65,7 @@ func TestNewHandlerReadyzReturnsServiceUnavailableWhenDependenciesFail(t *testin
 		t.Fatalf("status code = %d, want %d", recorder.Code, http.StatusServiceUnavailable)
 	}
 
-	assertStatusResponse(t, recorder, "not_ready")
+	assertStatusResponse(t, recorder, "degraded")
 }
 
 func assertStatusResponse(t *testing.T, recorder *httptest.ResponseRecorder, wantStatus string) {
@@ -83,10 +83,6 @@ func assertStatusResponse(t *testing.T, recorder *httptest.ResponseRecorder, wan
 	if response.Status != wantStatus {
 		t.Fatalf("Status = %q, want %q", response.Status, wantStatus)
 	}
-
-	if response.Service != "k-map" {
-		t.Fatalf("Service = %q, want %q", response.Service, "k-map")
-	}
 }
 
 type stubReadinessChecker struct {
@@ -95,4 +91,17 @@ type stubReadinessChecker struct {
 
 func (checker stubReadinessChecker) Check(_ context.Context) error {
 	return checker.err
+}
+
+func (checker stubReadinessChecker) CheckAll(_ context.Context) ReadinessResult {
+	if checker.err != nil {
+		return ReadinessResult{
+			Status:       "degraded",
+			Dependencies: map[string]string{"test": checker.err.Error()},
+		}
+	}
+	return ReadinessResult{
+		Status:       "ok",
+		Dependencies: map[string]string{"test": "ok"},
+	}
 }

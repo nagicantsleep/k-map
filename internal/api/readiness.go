@@ -13,6 +13,19 @@ import (
 	"github.com/nagicantsleep/k-map/internal/config"
 )
 
+// DependencyStatus holds the status of a single dependency.
+type DependencyStatus struct {
+	Name   string
+	Status string
+	OK     bool
+}
+
+// ReadinessResult holds the overall readiness check result.
+type ReadinessResult struct {
+	Status       string
+	Dependencies map[string]string
+}
+
 type dependencyCheck struct {
 	address string
 	name    string
@@ -61,18 +74,50 @@ func NewReadinessChecker(cfg config.Config) (ReadinessChecker, error) {
 	}, nil
 }
 
-func (checker networkReadinessChecker) Check(ctx context.Context) error {
+// CheckAll returns the status of all dependencies.
+func (checker networkReadinessChecker) CheckAll(ctx context.Context) ReadinessResult {
+	result := ReadinessResult{
+		Status:       "ok",
+		Dependencies: make(map[string]string),
+	}
+
 	for _, check := range checker.checks {
+		status := "ok"
 		if err := checkTCPDependency(ctx, check); err != nil {
-			return fmt.Errorf("dependency %s unreachable at %s: %w", check.name, check.address, err)
+			status = fmt.Sprintf("unreachable: %s", truncateErrorMessage(err.Error()))
+			result.Status = "degraded"
+		}
+		result.Dependencies[check.name] = status
+	}
+
+	nominatimStatus := "ok"
+	if err := checker.nominatim.Check(ctx); err != nil {
+		nominatimStatus = fmt.Sprintf("unhealthy: %s", truncateErrorMessage(err.Error()))
+		result.Status = "degraded"
+	}
+	result.Dependencies["nominatim"] = nominatimStatus
+
+	return result
+}
+
+// Check returns an error if any dependency is unhealthy (for backwards compatibility with ReadinessChecker interface).
+func (checker networkReadinessChecker) Check(ctx context.Context) error {
+	result := checker.CheckAll(ctx)
+	if result.Status != "ok" {
+		for name, status := range result.Dependencies {
+			if status != "ok" {
+				return fmt.Errorf("dependency %s: %s", name, status)
+			}
 		}
 	}
-
-	if err := checker.nominatim.Check(ctx); err != nil {
-		return fmt.Errorf("dependency nominatim not ready: %w", err)
-	}
-
 	return nil
+}
+
+func truncateErrorMessage(msg string) string {
+	if len(msg) > 100 {
+		return msg[:100]
+	}
+	return msg
 }
 
 func checkTCPDependency(ctx context.Context, check dependencyCheck) error {

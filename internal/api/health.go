@@ -7,13 +7,15 @@ import (
 )
 
 type statusResponse struct {
-	Status  string `json:"status"`
-	Service string `json:"service"`
+	Status       string            `json:"status"`
+	Service      string            `json:"service,omitempty"`
+	Dependencies map[string]string `json:"dependencies,omitempty"`
 }
 
 // ReadinessChecker verifies whether configured runtime dependencies are reachable.
 type ReadinessChecker interface {
 	Check(ctx context.Context) error
+	CheckAll(ctx context.Context) ReadinessResult
 }
 
 func healthHandler(writer http.ResponseWriter, request *http.Request) {
@@ -37,20 +39,23 @@ func readinessHandler(checker ReadinessChecker) http.HandlerFunc {
 			return
 		}
 
-		if checker != nil {
-			if err := checker.Check(request.Context()); err != nil {
-				writeStatusJSON(writer, http.StatusServiceUnavailable, statusResponse{
-					Status:  "not_ready",
-					Service: "k-map",
-				})
-
-				return
-			}
+		if checker == nil {
+			writeStatusJSON(writer, http.StatusOK, statusResponse{
+				Status:  "ok",
+				Service: "k-map",
+			})
+			return
 		}
 
-		writeStatusJSON(writer, http.StatusOK, statusResponse{
-			Status:  "ready",
-			Service: "k-map",
+		result := checker.CheckAll(request.Context())
+		statusCode := http.StatusOK
+		if result.Status != "ok" {
+			statusCode = http.StatusServiceUnavailable
+		}
+
+		writeStatusJSON(writer, statusCode, statusResponse{
+			Status:       result.Status,
+			Dependencies: result.Dependencies,
 		})
 	}
 }
