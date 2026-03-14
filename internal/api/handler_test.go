@@ -162,8 +162,8 @@ func TestForwardGeocodeHandler_GeocoderError(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d", rec.Code)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", rec.Code)
 	}
 }
 
@@ -318,8 +318,8 @@ func TestReverseGeocodeHandler_GeocoderError(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d", rec.Code)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", rec.Code)
 	}
 }
 
@@ -476,8 +476,8 @@ func TestProximityHandler_CheckerError(t *testing.T) {
 
 	handler.ServeHTTP(rec, req)
 
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d", rec.Code)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", rec.Code)
 	}
 }
 

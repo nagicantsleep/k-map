@@ -140,7 +140,7 @@ func forwardGeocodeHandler(geocoder Geocoder) http.HandlerFunc {
 
 		results, err := geocoder.Search(r.Context(), req.Query, limit)
 		if err != nil {
-			WriteInternalError(w, requestID)
+			WriteGeocoderUnavailable(w, requestID)
 			return
 		}
 
@@ -182,7 +182,7 @@ func reverseGeocodeHandler(geocoder Geocoder) http.HandlerFunc {
 
 		result, err := geocoder.Reverse(r.Context(), req.Latitude, req.Longitude)
 		if err != nil {
-			WriteInternalError(w, requestID)
+			WriteGeocoderUnavailable(w, requestID)
 			return
 		}
 
@@ -226,7 +226,7 @@ func proximityHandler(checker ProximityChecker) http.HandlerFunc {
 
 		result, err := checker.Check(r.Context(), req.Latitude, req.Longitude, req.TargetQuery, req.ThresholdMeters)
 		if err != nil {
-			WriteInternalError(w, requestID)
+			WriteGeocoderUnavailable(w, requestID)
 			return
 		}
 

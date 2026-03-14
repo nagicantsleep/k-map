@@ -60,6 +60,7 @@ func run() int {
 	metrics := telemetry.NewMetrics(reg)
 
 	nominatimClient := geocode.NewNominatimClient(cfg.Nominatim.BaseURL, cfg.HTTP.WriteTimeout).
+		WithRetries(cfg.Nominatim.MaxRetries).
 		WithMetrics(metrics)
 
 	cache := storage.NewCache(cfg.Redis.Address, cfg.Redis.CacheTTL)

@@ -24,6 +24,7 @@ const (
 	defaultCacheTTL              = 5 * time.Minute
 	defaultPostgresDSN           = "postgres://kmap:kmap@localhost:5432/kmap?sslmode=disable"
 	defaultRateLimitRPM          = 60
+	defaultNominatimMaxRetries   = 1
 )
 
 var errInvalidConfig = errors.New("invalid configuration")
@@ -65,6 +66,7 @@ type RedisConfig struct {
 type NominatimConfig struct {
 	BaseURL     string
 	DialTimeout time.Duration
+	MaxRetries  int
 }
 
 // RateLimitConfig contains rate limiting settings.
@@ -96,6 +98,7 @@ func Load() (Config, error) {
 		Nominatim: NominatimConfig{
 			BaseURL:     getEnv("KMAP_NOMINATIM_URL", defaultNominatimBaseURL),
 			DialTimeout: getDurationEnv("KMAP_NOMINATIM_DIAL_TIMEOUT", defaultDependencyDialTimeout),
+			MaxRetries:  getIntEnv("KMAP_NOMINATIM_MAX_RETRIES", defaultNominatimMaxRetries),
 		},
 		RateLimit: RateLimitConfig{
 			RequestsPerMinute: getIntEnv("KMAP_RATE_LIMIT_RPM", defaultRateLimitRPM),

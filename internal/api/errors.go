@@ -7,11 +7,12 @@ import (
 
 // Error codes for API responses.
 const (
-	ErrCodeValidation       = "validation_error"
-	ErrCodeUnauthorized     = "unauthorized"
-	ErrCodeNotFound         = "not_found"
+	ErrCodeValidation        = "validation_error"
+	ErrCodeUnauthorized      = "unauthorized"
+	ErrCodeNotFound          = "not_found"
 	ErrCodeRateLimitExceeded = "rate_limit_exceeded"
-	ErrCodeInternal         = "internal_error"
+	ErrCodeInternal          = "internal_error"
+	ErrCodeGeocoderUnavailable = "geocoder_unavailable"
 )
 
 // ErrorDetail represents the error object in an error response.
@@ -64,4 +65,9 @@ func WriteRateLimitExceeded(w http.ResponseWriter, message, requestID string) {
 // WriteInternalError writes a 500 internal error response.
 func WriteInternalError(w http.ResponseWriter, requestID string) {
 	WriteError(w, http.StatusInternalServerError, ErrCodeInternal, "Internal server error", requestID)
+}
+
+// WriteGeocoderUnavailable writes a 503 response for geocoder outages.
+func WriteGeocoderUnavailable(w http.ResponseWriter, requestID string) {
+	WriteError(w, http.StatusServiceUnavailable, ErrCodeGeocoderUnavailable, "Geocoding service temporarily unavailable", requestID)
 }

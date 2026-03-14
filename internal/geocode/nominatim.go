@@ -19,6 +19,7 @@ type NominatimClient struct {
 	baseURL    string
 	httpClient *http.Client
 	metrics    *telemetry.Metrics
+	maxRetries int
 }
 
 // NewNominatimClient creates a new Nominatim client.
@@ -28,7 +29,14 @@ func NewNominatimClient(baseURL string, timeout time.Duration) *NominatimClient 
 		httpClient: &http.Client{
 			Timeout: timeout,
 		},
+		maxRetries: 1,
 	}
+}
+
+// WithRetries configures the maximum number of retries for transient failures.
+func (c *NominatimClient) WithRetries(n int) *NominatimClient {
+	c.maxRetries = n
+	return c
 }
 
 // WithMetrics attaches a metrics collector to the Nominatim client.
@@ -79,31 +87,9 @@ func (c *NominatimClient) Search(ctx context.Context, query string, limit int) (
 
 	endpoint := fmt.Sprintf("%s/search?%s", c.baseURL, params.Encode())
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	body, err := c.doWithRetry(ctx, endpoint, "search")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	start := time.Now()
-	resp, err := c.httpClient.Do(req)
-	elapsed := time.Since(start)
-
-	if c.metrics != nil {
-		c.metrics.GeocoderDuration.WithLabelValues("search").Observe(elapsed.Seconds())
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("nominatim request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("nominatim returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, err
 	}
 
 	var results []nominatimResult
@@ -124,31 +110,9 @@ func (c *NominatimClient) Reverse(ctx context.Context, lat, lng float64) (*api.G
 
 	endpoint := fmt.Sprintf("%s/reverse?%s", c.baseURL, params.Encode())
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	body, err := c.doWithRetry(ctx, endpoint, "reverse")
 	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	start := time.Now()
-	resp, err := c.httpClient.Do(req)
-	elapsed := time.Since(start)
-
-	if c.metrics != nil {
-		c.metrics.GeocoderDuration.WithLabelValues("reverse").Observe(elapsed.Seconds())
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("nominatim request failed: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("nominatim returned status %d", resp.StatusCode)
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
+		return nil, err
 	}
 
 	var result nominatimResult
@@ -163,6 +127,80 @@ func (c *NominatimClient) Reverse(ctx context.Context, lat, lng float64) (*api.G
 
 	normalized := c.normalizeResult(result)
 	return &normalized, nil
+}
+
+// doWithRetry executes a GET request against the given endpoint with exponential-backoff retry
+// on transient failures (network errors or 5xx). It does not retry on 4xx or context cancellation.
+func (c *NominatimClient) doWithRetry(ctx context.Context, endpoint, operation string) ([]byte, error) {
+	const initialBackoff = 500 * time.Millisecond
+
+	var lastErr error
+
+	for attempt := 0; attempt <= c.maxRetries; attempt++ {
+		if attempt > 0 {
+			backoff := initialBackoff * time.Duration(1<<(attempt-1))
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoff):
+			}
+		}
+
+		body, transient, err := c.doOnce(ctx, endpoint, operation)
+		if err == nil {
+			return body, nil
+		}
+
+		lastErr = err
+		if !transient {
+			return nil, err
+		}
+	}
+
+	return nil, lastErr
+}
+
+// doOnce performs a single HTTP GET. Returns (body, transient, error).
+// transient=true means the caller may retry; transient=false means do not retry.
+func (c *NominatimClient) doOnce(ctx context.Context, endpoint, operation string) ([]byte, bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	if err != nil {
+		return nil, false, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	start := time.Now()
+	resp, err := c.httpClient.Do(req)
+	elapsed := time.Since(start)
+
+	if c.metrics != nil {
+		c.metrics.GeocoderDuration.WithLabelValues(operation).Observe(elapsed.Seconds())
+	}
+
+	if err != nil {
+		// Network-level errors (timeout, connection refused) are transient
+		// unless the context was cancelled.
+		if ctx.Err() != nil {
+			return nil, false, fmt.Errorf("nominatim request cancelled: %w", ctx.Err())
+		}
+		return nil, true, fmt.Errorf("nominatim request failed: %w", err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, true, fmt.Errorf("failed to read response: %w", err)
+	}
+
+	if resp.StatusCode >= 500 {
+		return nil, true, fmt.Errorf("nominatim returned status %d", resp.StatusCode)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		// 4xx: non-transient, do not retry
+		return nil, false, fmt.Errorf("nominatim returned status %d", resp.StatusCode)
+	}
+
+	return body, false, nil
 }
 
 func (c *NominatimClient) normalizeResults(results []nominatimResult) []api.GeocodeResult {
