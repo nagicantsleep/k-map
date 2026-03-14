@@ -20,6 +20,9 @@ type contextKey string
 // requestIDKey is the context key for the request ID.
 const requestIDKey contextKey = "requestID"
 
+// tenantIDKey is the context key for the tenant ID.
+const tenantIDKey contextKey = "tenantID"
+
 // RequestIDFromContext retrieves the request ID from the context.
 func RequestIDFromContext(ctx context.Context) string {
 	if ctx == nil {
@@ -31,6 +34,24 @@ func RequestIDFromContext(ctx context.Context) string {
 	}
 
 	return ""
+}
+
+// TenantIDFromContext retrieves the tenant ID from the context.
+func TenantIDFromContext(ctx context.Context) string {
+	if ctx == nil {
+		return ""
+	}
+
+	if id, ok := ctx.Value(tenantIDKey).(string); ok {
+		return id
+	}
+
+	return ""
+}
+
+// WithTenantID stores the tenant ID in the context and returns the new context.
+func WithTenantID(ctx context.Context, tenantID string) context.Context {
+	return context.WithValue(ctx, tenantIDKey, tenantID)
 }
 
 // RequestIDMiddleware generates or propagates a unique request ID for each request.
@@ -85,22 +106,24 @@ func LoggingMiddleware(logger *slog.Logger) func(http.Handler) http.Handler {
 			requestID := RequestIDFromContext(r.Context())
 
 			logger.Debug("request started",
-				"method", r.Method,
-				"path", r.URL.Path,
-				"request_id", requestID,
+				telemetry.FieldMethod, r.Method,
+				telemetry.FieldPath, r.URL.Path,
+				telemetry.FieldRequestID, requestID,
 			)
 
 			rw := &responseWriter{ResponseWriter: w}
 			next.ServeHTTP(rw, r)
 
 			latency := time.Since(start)
+			tenantID := TenantIDFromContext(r.Context())
 
 			logger.Info("request completed",
-				"method", r.Method,
-				"path", r.URL.Path,
-				"status", rw.statusCode,
-				"latency_ms", latency.Milliseconds(),
-				"request_id", requestID,
+				telemetry.FieldMethod, r.Method,
+				telemetry.FieldPath, r.URL.Path,
+				telemetry.FieldStatus, rw.statusCode,
+				telemetry.FieldLatencyMs, latency.Milliseconds(),
+				telemetry.FieldRequestID, requestID,
+				telemetry.FieldTenantID, tenantID,
 			)
 		})
 	}

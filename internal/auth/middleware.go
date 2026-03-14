@@ -52,7 +52,7 @@ func AuthMiddleware(lookup KeyLookup) func(http.Handler) http.Handler {
 				_ = lookup.TouchAPIKey(context.Background(), apiKey.ID)
 			}()
 
-			ctx := withTenantID(r.Context(), apiKey.TenantID)
+			ctx := api.WithTenantID(r.Context(), apiKey.TenantID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

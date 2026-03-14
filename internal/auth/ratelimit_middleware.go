@@ -18,7 +18,7 @@ func RateLimitMiddleware(checker RateLimitChecker) func(http.Handler) http.Handl
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			requestID := api.RequestIDFromContext(r.Context())
-			tenantID := TenantIDFromContext(r.Context())
+			tenantID := api.TenantIDFromContext(r.Context())
 
 			if tenantID == "" {
 				api.WriteInternalError(w, requestID)

@@ -23,7 +23,7 @@ func UsageMiddleware(recorder UsageRecorderInterface, logger *slog.Logger) func(
 			rw := &usageResponseWriter{ResponseWriter: w, statusCode: http.StatusOK}
 			next.ServeHTTP(rw, r)
 
-			tenantID := TenantIDFromContext(r.Context())
+			tenantID := api.TenantIDFromContext(r.Context())
 			if tenantID == "" {
 				return
 			}

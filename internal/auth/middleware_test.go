@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/nagicantsleep/k-map/internal/api"
 )
 
 // mockKeyLookup is a test double for KeyLookup.
@@ -77,7 +79,7 @@ func TestAuthMiddleware_ValidKey(t *testing.T) {
 
 	var capturedTenantID string
 	handler := AuthMiddleware(lookup)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		capturedTenantID = TenantIDFromContext(r.Context())
+		capturedTenantID = api.TenantIDFromContext(r.Context())
 		w.WriteHeader(http.StatusOK)
 	}))
 

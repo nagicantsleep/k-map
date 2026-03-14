@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/nagicantsleep/k-map/internal/api"
 )
 
 // mockRateLimitChecker is a test double for RateLimitChecker.
@@ -24,7 +26,7 @@ func TestRateLimitMiddleware_Allowed(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req = req.WithContext(withTenantID(req.Context(), "tenant-1"))
+	req = req.WithContext(api.WithTenantID(req.Context(), "tenant-1"))
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
@@ -40,7 +42,7 @@ func TestRateLimitMiddleware_RateLimited(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest(http.MethodGet, "/", nil)
-	req = req.WithContext(withTenantID(req.Context(), "tenant-1"))
+	req = req.WithContext(api.WithTenantID(req.Context(), "tenant-1"))
 	rr := httptest.NewRecorder()
 	handler.ServeHTTP(rr, req)
 
