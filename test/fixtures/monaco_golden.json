@@ -1,0 +1,134 @@
+{
+  "description": "Golden dataset for Monaco (Geofabrik extract). Used for launch-region validation.",
+  "forward": [
+    {
+      "id": "fw-01",
+      "query": "Mairie de Monaco",
+      "expect_lat_min": 43.70,
+      "expect_lat_max": 43.75,
+      "expect_lon_min": 7.40,
+      "expect_lon_max": 7.45,
+      "expect_min_results": 1
+    },
+    {
+      "id": "fw-02",
+      "query": "Place du Casino, Monaco",
+      "expect_lat_min": 43.73,
+      "expect_lat_max": 43.75,
+      "expect_lon_min": 7.41,
+      "expect_lon_max": 7.43,
+      "expect_min_results": 1
+    },
+    {
+      "id": "fw-03",
+      "query": "Palais Princier de Monaco",
+      "expect_lat_min": 43.72,
+      "expect_lat_max": 43.74,
+      "expect_lon_min": 7.41,
+      "expect_lon_max": 7.43,
+      "expect_min_results": 1
+    },
+    {
+      "id": "fw-04",
+      "query": "Stade Louis II Monaco",
+      "expect_lat_min": 43.72,
+      "expect_lat_max": 43.74,
+      "expect_lon_min": 7.41,
+      "expect_lon_max": 7.43,
+      "expect_min_results": 1
+    },
+    {
+      "id": "fw-05",
+      "query": "Jardin Exotique de Monaco",
+      "expect_lat_min": 43.72,
+      "expect_lat_max": 43.74,
+      "expect_lon_min": 7.40,
+      "expect_lon_max": 7.43,
+      "expect_min_results": 1
+    }
+  ],
+  "reverse": [
+    {
+      "id": "rv-01",
+      "description": "Monaco Palace area",
+      "latitude": 43.7311,
+      "longitude": 7.4197,
+      "expect_result": true
+    },
+    {
+      "id": "rv-02",
+      "description": "Casino de Monte-Carlo area",
+      "latitude": 43.7393,
+      "longitude": 7.4271,
+      "expect_result": true
+    },
+    {
+      "id": "rv-03",
+      "description": "Port Hercule area",
+      "latitude": 43.7353,
+      "longitude": 7.4247,
+      "expect_result": true
+    },
+    {
+      "id": "rv-04",
+      "description": "Fontvieille district",
+      "latitude": 43.7272,
+      "longitude": 7.4133,
+      "expect_result": true
+    },
+    {
+      "id": "rv-05",
+      "description": "Condamine quarter",
+      "latitude": 43.7338,
+      "longitude": 7.4196,
+      "expect_result": true
+    }
+  ],
+  "proximity": [
+    {
+      "id": "px-01",
+      "description": "At Mairie de Monaco - should be near",
+      "latitude": 43.7311,
+      "longitude": 7.4197,
+      "target_query": "Mairie de Monaco",
+      "threshold_meters": 500,
+      "expect_is_near": true
+    },
+    {
+      "id": "px-02",
+      "description": "At Casino - should be near with 200m threshold",
+      "latitude": 43.7393,
+      "longitude": 7.4271,
+      "target_query": "Place du Casino, Monaco",
+      "threshold_meters": 200,
+      "expect_is_near": true
+    },
+    {
+      "id": "px-03",
+      "description": "Far from target (Monaco Palace to Casino) - not near at 100m",
+      "latitude": 43.7311,
+      "longitude": 7.4197,
+      "target_query": "Place du Casino, Monaco",
+      "threshold_meters": 100,
+      "expect_is_near": false
+    },
+    {
+      "id": "px-04",
+      "description": "Port Hercule to Palace - not near at tight threshold",
+      "latitude": 43.7353,
+      "longitude": 7.4247,
+      "target_query": "Palais Princier de Monaco",
+      "threshold_meters": 50,
+      "expect_is_near": false
+    },
+    {
+      "id": "px-05",
+      "description": "Very wide threshold from Fontvieille to Condamine - should be near",
+      "latitude": 43.7272,
+      "longitude": 7.4133,
+      "target_query": "La Condamine Monaco",
+      "threshold_meters": 2000,
+      "expect_is_near": true
+    }
+  ]
+}
