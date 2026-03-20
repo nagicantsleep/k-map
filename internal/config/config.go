@@ -25,12 +25,16 @@ const (
 	defaultPostgresDSN           = "postgres://kmap:kmap@localhost:5432/kmap?sslmode=disable"
 	defaultRateLimitRPM          = 60
 	defaultNominatimMaxRetries   = 1
+
+	// EnvProduction is the value of KMAP_ENV that enables production-mode validation.
+	EnvProduction = "production"
 )
 
 var errInvalidConfig = errors.New("invalid configuration")
 
 // Config contains process-wide application settings.
 type Config struct {
+	Env       string
 	HTTP      HTTPConfig
 	Postgres  PostgresConfig
 	Redis     RedisConfig
@@ -77,6 +81,7 @@ type RateLimitConfig struct {
 // Load builds Config from environment variables and applies defaults.
 func Load() (Config, error) {
 	cfg := Config{
+		Env: getEnv("KMAP_ENV", ""),
 		HTTP: HTTPConfig{
 			Address:           getEnv("KMAP_HTTP_ADDR", defaultHTTPAddress),
 			ReadHeaderTimeout: getDurationEnv("KMAP_HTTP_READ_HEADER_TIMEOUT", defaultHTTPReadHeaderTimeout),
@@ -160,6 +165,12 @@ func (c Config) Validate() error {
 
 	if c.Nominatim.DialTimeout <= 0 {
 		return fmt.Errorf("%w: KMAP_NOMINATIM_DIAL_TIMEOUT must be positive", errInvalidConfig)
+	}
+
+	if c.Env == EnvProduction {
+		if c.Postgres.DSN == defaultPostgresDSN {
+			return fmt.Errorf("%w: KMAP_POSTGRES_DSN must be explicitly set in production (default insecure credentials detected)", errInvalidConfig)
+		}
 	}
 
 	return nil

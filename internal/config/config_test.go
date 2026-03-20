@@ -170,6 +170,68 @@ func TestValidateRejectsInvalidConfig(t *testing.T) {
 	}
 }
 
+func TestValidateRejectsDefaultDSNInProduction(t *testing.T) {
+	cfg := Config{
+		Env: EnvProduction,
+		HTTP: HTTPConfig{
+			Address:           defaultHTTPAddress,
+			ReadHeaderTimeout: time.Second,
+			ReadTimeout:       time.Second,
+			WriteTimeout:      time.Second,
+			IdleTimeout:       time.Second,
+			ShutdownTimeout:   time.Second,
+		},
+		Postgres: PostgresConfig{
+			Address:     defaultPostgresAddress,
+			DSN:         defaultPostgresDSN, // insecure default
+			DialTimeout: time.Second,
+		},
+		Redis: RedisConfig{
+			Address:     defaultRedisAddress,
+			DialTimeout: time.Second,
+		},
+		Nominatim: NominatimConfig{
+			BaseURL:     defaultNominatimBaseURL,
+			DialTimeout: time.Second,
+		},
+	}
+
+	if err := cfg.Validate(); err == nil {
+		t.Fatal("Validate() error = nil, want error for default DSN in production")
+	}
+}
+
+func TestValidateAllowsDefaultDSNOutsideProduction(t *testing.T) {
+	cfg := Config{
+		Env: "", // not production
+		HTTP: HTTPConfig{
+			Address:           defaultHTTPAddress,
+			ReadHeaderTimeout: time.Second,
+			ReadTimeout:       time.Second,
+			WriteTimeout:      time.Second,
+			IdleTimeout:       time.Second,
+			ShutdownTimeout:   time.Second,
+		},
+		Postgres: PostgresConfig{
+			Address:     defaultPostgresAddress,
+			DSN:         defaultPostgresDSN,
+			DialTimeout: time.Second,
+		},
+		Redis: RedisConfig{
+			Address:     defaultRedisAddress,
+			DialTimeout: time.Second,
+		},
+		Nominatim: NominatimConfig{
+			BaseURL:     defaultNominatimBaseURL,
+			DialTimeout: time.Second,
+		},
+	}
+
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate() error = %v, want nil outside production", err)
+	}
+}
+
 func TestValidateRejectsInvalidNominatimURL(t *testing.T) {
 	cfg := Config{
 		HTTP: HTTPConfig{
